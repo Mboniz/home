@@ -22,7 +22,12 @@ body{font-family:'Archivo',system-ui,sans-serif;color:var(--ink);touch-action:no
 .hud .z b{color:#FF9A6E}
 .hud .eggs{margin-left:auto;display:flex;gap:7px;align-items:center}
 .dot{width:9px;height:9px;border-radius:50%;border:1px solid #CFC4B3;transition:background .3s,transform .4s cubic-bezier(.34,1.56,.64,1)}
-.dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.25)}
+.dot{padding:0;background:none;position:relative;font:inherit;-webkit-appearance:none;appearance:none}
+.dot::after{content:'';position:absolute;inset:-14px -4px}
+.dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.25);cursor:pointer}
+.dot.on:hover,.dot.on:focus-visible{border-color:#fff;outline:none}
+.dot.wait{animation:wait 1s ease-in-out infinite}
+@keyframes wait{50%{transform:scale(1.9)}}
 .title{position:fixed;left:28px;top:66px;z-index:2;pointer-events:none;transform-origin:top left;transition:transform .7s cubic-bezier(.2,.8,.2,1)}
 .title h1{font-stretch:125%;font-weight:800;font-size:clamp(38px,7.2vw,104px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;color:#fff;text-shadow:0 2px 30px rgba(70,35,10,.28)}
 .title p{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.1em;color:#fff;margin-top:14px;text-shadow:0 1px 10px rgba(70,35,10,.4);transition:opacity .4s}
@@ -75,12 +80,12 @@ body{font-family:'Archivo',system-ui,sans-serif;color:var(--ink);touch-action:no
 <body>
 <canvas id="c" aria-hidden="true"></canvas>
 
-<header class="hud" aria-hidden="true">
-  <div><span class="k">DIST</span><b id="hDist">0.00 km</b></div>
-  <div><span class="k">PACE</span><b id="hPace">—:—</b><span class="k" style="margin:0 0 0 4px">/px</span></div>
-  <div class="hide-s"><span class="k">HR</span><b id="hHr">68</b><span class="k" style="margin:0 0 0 4px">bpm</span></div>
-  <div class="z hide-s"><span class="k">ZONE</span><b id="hZone">1 / 5</b></div>
-  <div class="eggs"><span class="k">FOUND</span><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+<header class="hud">
+  <div aria-hidden="true"><span class="k">DIST</span><b id="hDist">0.00 km</b></div>
+  <div aria-hidden="true"><span class="k">PACE</span><b id="hPace">—:—</b><span class="k" style="margin:0 0 0 4px">/px</span></div>
+  <div class="hide-s" aria-hidden="true"><span class="k">HR</span><b id="hHr">68</b><span class="k" style="margin:0 0 0 4px">bpm</span></div>
+  <div class="z hide-s" aria-hidden="true"><span class="k">ZONE</span><b id="hZone">1 / 5</b></div>
+  <div class="eggs"><span class="k">FOUND</span><button class="dot" disabled aria-label="Stop 1, not found yet"></button><button class="dot" disabled aria-label="Stop 2, not found yet"></button><button class="dot" disabled aria-label="Stop 3, not found yet"></button><button class="dot" disabled aria-label="Stop 4, not found yet"></button></div>
 </header>
 
 <div class="title" id="title">
@@ -797,18 +802,44 @@ function toast(msg, ms = 4200) { const t = $('toast'); t.textContent = msg; t.cl
 function pop(text, x, y) { const d = document.createElement('div'); d.className = 'pop'; d.textContent = text; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200); }
 function popAt(v3, text) { const p = v3.clone().project(camera); pop(text, (p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight); }
 const media = $('cMedia');
-function closeCard() { card.classList.remove('show'); setTimeout(() => { if (!card.classList.contains('show')) media.innerHTML = ''; }, 300); }
+/* Cards never overwrite each other: a stop reached while a card is open waits in a queue
+   (its dot pulses) until the open card is closed. Any found dot reopens its card. */
+const order = [], queue = [];
+let openId = null, allToast = false;
+function closeCard() {
+  card.classList.remove('show'); openId = null;
+  setTimeout(() => {
+    if (openId) return;
+    media.innerHTML = '';
+    if (queue.length) { queue.sort((a, b) => order.indexOf(a) - order.indexOf(b)); show(queue.shift()); }
+  }, 320);
+}
+function discover(id) {
+  if (found.has(id)) return;
+  found.add(id); order.push(id);
+  const d = dots[order.length - 1]; d.classList.add('on'); d.disabled = false; d.setAttribute('aria-label', `Stop ${order.length}, open card`);
+}
 function reveal(id) {
+  discover(id);
+  if (openId && openId !== id) { if (!queue.includes(id)) queue.push(id); dots[order.indexOf(id)].classList.add('wait'); return; }
+  show(id);
+}
+dots.forEach((d, i) => d.addEventListener('click', () => {
+  const id = order[i]; if (!id || id === openId) return;
+  const q = queue.indexOf(id); if (q >= 0) queue.splice(q, 1);
+  show(id);
+}));
+function show(id) {
   const e = EGGS[id];
-  if (!found.has(id)) { found.add(id); dots[found.size - 1].classList.add('on'); }
-  $('cLbl').textContent = `${String(found.size).padStart(2, '0')} / 04`;
+  openId = id; dots[order.indexOf(id)].classList.remove('wait');
+  $('cLbl').textContent = `${String(order.indexOf(id) + 1).padStart(2, '0')} / 04`;
   $('cTtl').innerHTML = e.ttl ?? ''; $('cBody').textContent = e.body ?? ''; $('cCta').textContent = e.cta; $('cCta').href = e.url;
   media.innerHTML = e.video
     ? `<iframe src="https://www.youtube-nocookie.com/embed/${e.video}?autoplay=1&rel=0&playsinline=1&modestbranding=1" title="YouTube video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`
     : '';
   card.classList.toggle('vid', !!e.video);
   card.classList.remove('show'); void card.offsetWidth; card.classList.add('show');
-  if (found.size === 4) setTimeout(() => toast('4 / 4 · You know me better than my LinkedIn does.', 6500), 1600);
+  if (found.size === 4 && !allToast) { allToast = true; setTimeout(() => toast('4 / 4 · You know me better than my LinkedIn does.', 6500), 1600); }
 }
 $('cardX').addEventListener('click', closeCard);
 
@@ -888,7 +919,7 @@ function frame() {
   }
 
   // easter eggs: fire once when you run past
-  TRIGGERS.forEach(t => { if (!t.done && youX >= t.x) { t.done = true; t.run(); setTimeout(() => reveal(t.id), t.delay); } });
+  TRIGGERS.forEach(t => { if (!t.done && youX >= t.x) { t.done = true; discover(t.id); t.run(); setTimeout(() => reveal(t.id), t.delay); } });
 
   busker.armL.a.rotation.set(0, 0, 1.15); busker.armL.b.rotation.z = .9;
   busker.armR.a.rotation.set(0, 0, .55); busker.armR.b.rotation.z = 1.35 + (playing ? Math.sin(elapsed * 16) * .25 : 0);
