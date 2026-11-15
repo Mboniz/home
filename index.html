@@ -781,6 +781,8 @@ const pigeons = [];
 })();
 
 
+// figures live on layer 1 so the poster outline pass can draw them separately; the camera sees both layers in every style
+camera.layers.enableAll();
 [you.root, marco.root, busker.root, ...pigeons.map(p => p.g)].forEach(r => r.traverse(o => o.layers.set(1)));
 
 /* ---------- banners ---------- */
