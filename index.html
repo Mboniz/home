@@ -820,8 +820,14 @@ function discover(id) {
   found.add(id); order.push(id);
   const d = dots[order.length - 1]; d.classList.add('on'); d.disabled = false; d.setAttribute('aria-label', `Stop ${order.length}, open card`);
 }
+/* Automatic reveals arrive after a per-stop delay, so on a fast scroll an earlier stop
+   can land after a later one: it must not take the card back. */
+let lastAuto = -1;
 function reveal(id) {
   discover(id);
+  const n = order.indexOf(id);
+  if (n < lastAuto) return;
+  lastAuto = n;
   show(id);
 }
 dots.forEach((d, i) => d.addEventListener('click', () => {
