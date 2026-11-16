@@ -804,16 +804,15 @@ function toast(msg, ms = 4200) { const t = $('toast'); t.textContent = msg; t.cl
 function pop(text, x, y) { const d = document.createElement('div'); d.className = 'pop'; d.textContent = text; d.style.left = x + 'px'; d.style.top = y + 'px'; document.body.appendChild(d); setTimeout(() => d.remove(), 1200); }
 function popAt(v3, text) { const p = v3.clone().project(camera); pop(text, (p.x + 1) / 2 * innerWidth, (1 - p.y) / 2 * innerHeight); }
 const media = $('cMedia');
-/* Cards never overwrite each other: a stop reached while a card is open waits in a queue
-   (its dot pulses) until the open card is closed. Any found dot reopens its card. */
-const order = [], queue = [];
+/* Reaching a stop opens its card, replacing whatever card is open. Nothing is lost:
+   every found dot in the top bar is a button that reopens its card. */
+const order = [];
 let openId = null, allToast = false;
 function closeCard() {
   card.classList.remove('show'); openId = null;
   setTimeout(() => {
     if (openId) return;
     media.innerHTML = '';
-    if (queue.length) { queue.sort((a, b) => order.indexOf(a) - order.indexOf(b)); show(queue.shift()); }
   }, 320);
 }
 function discover(id) {
@@ -823,12 +822,10 @@ function discover(id) {
 }
 function reveal(id) {
   discover(id);
-  if (openId && openId !== id) { if (!queue.includes(id)) queue.push(id); dots[order.indexOf(id)].classList.add('wait'); return; }
   show(id);
 }
 dots.forEach((d, i) => d.addEventListener('click', () => {
   const id = order[i]; if (!id || id === openId) return;
-  const q = queue.indexOf(id); if (q >= 0) queue.splice(q, 1);
   show(id);
 }));
 function show(id) {
